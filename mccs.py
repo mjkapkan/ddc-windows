@@ -27,6 +27,10 @@ mccs.py script.file: runs all commands in a script file. # lines denote comments
 mccs.py x 0x0A 0x0B: Runs command 0x0A with parameter 0x0B on monitor index x.
 
 Good luck!
+
+########
+Modified by mjkapkan to use as module, added funciton to send specifc param to all monitors
+
 """
 import sys
 
@@ -52,7 +56,10 @@ def _enumerate_monitors():
     if not windll.user32.EnumDisplayMonitors(None, None, _MONITORENUMPROC(callback), None):
         raise WinError('EnumDisplayMonitors failed')
 
-def _iter_physical_monitors(close_handles=True):
+def _clear_monitors():
+    MONITORS.clear()
+
+def _iter_physical_monitors(close_handles=True,show_info=False):
     """Iterates physical monitors.
 
     The handles are closed automatically whenever the iterator is advanced.
@@ -72,7 +79,8 @@ def _iter_physical_monitors(close_handles=True):
         if not windll.dxva2.GetPhysicalMonitorsFromHMONITOR(monitor, count.value, physical_array):
             raise WinError()
         for physical in physical_array:
-            print("Monitor {}: {}".format(counter, physical.description))
+            if show_info:
+                print("Monitor {}: {}".format(counter, physical.description))
             yield physical.handle
             if close_handles:
                 if not windll.dxva2.DestroyPhysicalMonitor(physical.handle):
@@ -114,7 +122,7 @@ def toggle_off_on():
 
 def process_command(monitor_id, command, parameter):
     print("Executing Command on monitor {}".format(monitor_id))
-    print("Command: {}, Parameter: {}".format(command, parameter))
+    # print("Command: {}, Parameter: {}".format(command, parameter))
 
     try:
         monitor_id_int = int(monitor_id)
@@ -129,7 +137,7 @@ def process_command(monitor_id, command, parameter):
         parameter_int
     )
 
-    print("Done")
+    # print("Done")
 
 def process_script(script_path):
     with open(script_path, mode='r') as script_file:
@@ -164,18 +172,32 @@ def process_script(script_path):
                 command["parameter"]
             )
 
-if __name__ == '__main__':
+def send_to_all(vcp_code,brightness):
+        _enumerate_monitors()
+        monitor_num = 0
+        for handle in _iter_physical_monitors(close_handles=True):
+            process_command(str(monitor_num), '0x' + vcp_code, hex(int(brightness)))
+            monitor_num += 1
+        _clear_monitors()
+
+def send_to_one(monitor_num,vcp_code,brightness):
+        _enumerate_monitors()
+        process_command(str(monitor_num), '0x' + vcp_code, hex(int(brightness)))
+        _clear_monitors()
+
+def show_attached():
     _enumerate_monitors()
     print("Attached Monitors")
-    for handle in _iter_physical_monitors(close_handles=False):
-        pass
-    if len(sys.argv) == 1:
-        print(
-            "Please provide a script path or monitor index, command and parameter"
-        )
-    elif len(sys.argv) == 2:
-        process_script(sys.argv[1])
-    elif len(sys.argv) == 4:
-        process_command(sys.argv[1], sys.argv[2], sys.argv[3])
-    else:
-        print("Wrong parameters")
+    monitor_num = 0
+    for handle in _iter_physical_monitors(close_handles=True,show_info=True):
+        print('ID: ' + str(monitor_num))
+        monitor_num += 1
+    _clear_monitors()
+
+
+
+##EXAMPLES:
+##
+##set_brightness('10',50)
+##send_to_one(0,'10',100)
+##show_attached()
